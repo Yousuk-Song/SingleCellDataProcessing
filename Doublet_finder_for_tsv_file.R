@@ -76,6 +76,7 @@ seurat_obj <- AddMetaData(seurat_obj, metadata$doublet_finder, col.name = "doubl
 seurat_obj.filtered <- subset(seurat_obj, doublet_finder == "Singlet")
 
 # 11. 결과 저장
-saveRDS(seurat_obj.filtered, file = "filtered_singlets.rds")
+output_path <- sub("\\.txt$", ".filtered_singlets.rds", file_path)
+saveRDS(seurat_obj.filtered, file = output_path)
 
 cat("Processing completed.\n")
