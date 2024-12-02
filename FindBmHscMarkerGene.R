@@ -1,3 +1,4 @@
+
 #1. 데이터 로드 및 전처리
 library(Seurat)
 library(SeuratDisk)
@@ -75,3 +76,58 @@ DimPlot(combined, reduction = "umap", group.by = "ident")  # Default clustering 
 
 # Find markers for each cluster
 markers <- FindAllMarkers(combined, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+
+
+# Path to marker gene files
+marker_dir <- "/data/workbench/scRSEQ_AML/exdata/CancerFinder/Stemcell_DEG/CellMarker2.0/stemcells"
+
+# List all marker gene files
+marker_files <- list.files(marker_dir, pattern = "*.csv", full.names = TRUE)
+
+# Read marker files into a named list
+marker_gene_lists <- lapply(marker_files, function(file) {
+  df <- read.csv(file, stringsAsFactors = FALSE, sep = '\t')
+  return(df$marker)
+})
+
+names(marker_gene_lists) <- basename(marker_files)
+
+# Annotate clusters based on marker genes
+annotate_clusters <- function(markers, cluster_markers) {
+  annotated_clusters <- list()
+  
+  for (cluster in unique(cluster_markers$cluster)) {
+    cluster_genes <- cluster_markers %>%
+      filter(cluster == !!cluster) %>%
+      pull(gene)
+    
+    for (marker_file in names(markers)) {
+      matched_genes <- intersect(cluster_genes, markers[[marker_file]])
+      
+      if (length(matched_genes) > 0) {
+        if (!marker_file %in% names(annotated_clusters)) {
+          annotated_clusters[[marker_file]] <- list()
+        }
+        annotated_clusters[[marker_file]][[as.character(cluster)]] <- matched_genes
+      }
+    }
+  }
+  return(annotated_clusters)
+}
+
+# Run annotation
+marker_annotations <- annotate_clusters(marker_gene_lists, markers)
+
+# Save cell IDs and annotations to files
+output_dir <- "/data/workbench/scRSEQ_AML/exdata/CancerFinder/Stemcell_DEG/Cluster_Annotations"
+dir.create(output_dir, showWarnings = FALSE)
+
+
+for (marker_file in names(marker_annotations)) {
+  for (cluster in names(marker_annotations[[marker_file]])) {
+    cluster_cells <- WhichCells(combined, idents = as.numeric(cluster))
+    output_path <- file.path(output_dir, paste0(gsub(".csv", "", marker_file), "_Cluster", cluster, "_Cells.txt"))
+    write.table(cluster_cells, file = output_path, row.names = FALSE, col.names = FALSE, quote = FALSE)
+  }
+}
+print("Cluster annotation and cell ID extraction completed!")
